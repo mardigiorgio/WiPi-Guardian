@@ -1,0 +1,13 @@
+database:
+  path: "/opt/wids/data/db.sqlite"
+api:
+  bind_host: "0.0.0.0"
+  bind_port: 8080
+  api_key: "CHANGE-ME"
+
+thresholds:
+  deauth:
+    window_sec: 10
+    per_src_limit: 30
+    global_limit: 80
+    cooldown_sec: 60

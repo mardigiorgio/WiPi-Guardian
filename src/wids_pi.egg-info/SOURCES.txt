@@ -1,0 +1,11 @@
+pyproject.toml
+src/wids/__init__.py
+src/wids/common.py
+src/wids/db.py
+src/wids/service/__init__.py
+src/wids/service/api.py
+src/wids_pi.egg-info/PKG-INFO
+src/wids_pi.egg-info/SOURCES.txt
+src/wids_pi.egg-info/dependency_links.txt
+src/wids_pi.egg-info/requires.txt
+src/wids_pi.egg-info/top_level.txt
