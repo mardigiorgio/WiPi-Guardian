@@ -1,13 +1,38 @@
+# Database location
 database:
   path: "/opt/wids/data/db.sqlite"
-api:
-  bind_host: "0.0.0.0"
-  bind_port: 8080
-  api_key: "CHANGE-ME"
 
+# API server settings
+api:
+  bind_host: "0.0.0.0"      # Listen on all interfaces
+  bind_port: 8080           # Port for the API server
+  api_key: "change-me"      # API key for protected routes
+
+# Detection thresholds
 thresholds:
   deauth:
-    window_sec: 10
-    per_src_limit: 30
-    global_limit: 80
-    cooldown_sec: 60
+    window_sec: 10          # Sliding window (seconds)
+    per_src_limit: 30       # Max deauths per source in window
+    global_limit: 80        # Max total deauths in window
+    cooldown_sec: 60        # Cooldown before repeating alert
+
+# Notifications
+alerts:
+  # Discord webhook URL (leave empty to disable)
+  discord_webhook: ""
+  # Email alerts (disabled by default — leave as {})
+  # To enable, provide smtp_host, smtp_port, username, password, from, to
+  email: {}
+
+# Policy: define trusted SSIDs and their allowed parameters
+policy:
+  ssids:
+    - name: "HomeNet"
+      allowed_bssids: ["aa:bb:cc:dd:ee:ff"]
+      allowed_channels: [1, 6, 11]
+      allowed_bands: ["2.4"]
+
+    - name: "IOT-NET"
+      allowed_bssids: []
+      allowed_channels: [36, 40, 44, 48]
+      allowed_bands: ["5"]
