@@ -1,38 +1,36 @@
-# Database location
+# Database location (relative to this file is supported)
 database:
-  path: "/opt/wids/data/db.sqlite"
+  path: "data/db.sqlite"
 
 # API server settings
 api:
-  bind_host: "0.0.0.0"      # Listen on all interfaces
-  bind_port: 8080           # Port for the API server
-  api_key: "change-me"      # API key for protected routes
+  bind_host: "0.0.0.0"
+  bind_port: 8080
+  api_key: "change-me"
 
 # Detection thresholds
 thresholds:
   deauth:
-    window_sec: 10          # Sliding window (seconds)
-    per_src_limit: 30       # Max deauths per source in window
-    global_limit: 80        # Max total deauths in window
-    cooldown_sec: 60        # Cooldown before repeating alert
+    window_sec: 10
+    per_src_limit: 30
+    global_limit: 80
+    cooldown_sec: 60
 
-# Notifications
+# Which Wi-Fi interface to sniff in monitor mode
+capture:
+  iface: "wlan0mon"
+
+# Select exactly one SSID to defend; others are ignored by detectors.
+defense:
+  ssid: ""               # e.g., "HomeNet"; empty = not armed
+  allowed_bssids: []     # optional allowlist of AP MACs
+  allowed_channels: []   # optional allowlist; empty = any
+  allowed_bands: []      # optional allowlist: ["2.4","5","6"]; empty = any
+
+# Notifications (optional)
 alerts:
-  # Discord webhook URL (leave empty to disable)
-  discord_webhook: ""
-  # Email alerts (disabled by default — leave as {})
-  # To enable, provide smtp_host, smtp_port, username, password, from, to
-  email: {}
+  discord_webhook: ""    # leave empty to disable
+  email: {}              # {} disables email
 
-# Policy: define trusted SSIDs and their allowed parameters
-policy:
-  ssids:
-    - name: "HomeNet"
-      allowed_bssids: ["aa:bb:cc:dd:ee:ff"]
-      allowed_channels: [1, 6, 11]
-      allowed_bands: ["2.4"]
-
-    - name: "IOT-NET"
-      allowed_bssids: []
-      allowed_channels: [36, 40, 44, 48]
-      allowed_bands: ["5"]
+# Legacy policy disabled — rogue logic uses 'defense' now
+policy: {}

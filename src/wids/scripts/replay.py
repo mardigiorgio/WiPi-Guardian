@@ -1,6 +1,7 @@
 # src/wids/scripts/replay.py
 from wids.common import load_config
-from wids.db import get_engine, init_db, session, Event
+from wids.db import get_engine, init_db, ensure_schema, session, Event
+from wids.ie.rsn import parse_rsn_info
 from datetime import datetime
 from scapy.all import (
     PcapReader, Dot11, Dot11Deauth, Dot11Disas, Dot11Beacon, Dot11Elt, RadioTap
@@ -23,6 +24,7 @@ def extract_ssid(pkt):
 def replay(cfg, pcap_path, band, chan):
     engine = get_engine(cfg["database"]["path"])
     init_db(engine)
+    ensure_schema(engine)
     count = 0
     with session(engine) as db:
         if not os.path.exists(pcap_path):
@@ -56,6 +58,8 @@ def replay(cfg, pcap_path, band, chan):
                 except Exception:
                     rssi = None
 
+            rsn = parse_rsn_info(pkt) if ev_type == "mgmt.beacon" else {}
+
             e = Event(
                 ts=datetime.utcnow(),
                 type=ev_type,
@@ -66,6 +70,8 @@ def replay(cfg, pcap_path, band, chan):
                 bssid=bssid,
                 ssid=ssid,
                 rssi=rssi,
+                rsn_akms=",".join(sorted(rsn.get("akms", []))) if rsn else None,
+                rsn_ciphers=",".join(sorted(rsn.get("ciphers", []))) if rsn else None,
             )
             db.add(e)
             count += 1

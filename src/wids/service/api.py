@@ -10,13 +10,15 @@ import uvicorn
 import asyncio, json, pathlib
 
 from wids.common import load_config, setup_logging
-from wids.db     import get_engine, init_db, session, Event, Alert
+from wids.db     import get_engine, init_db, ensure_schema, session, Event, Alert
+import yaml
 
 app = FastAPI(title="WIDS API")
 logger = setup_logging()
 
 cfg = {}
 engine = None
+cfg_path = None
 
 # CORS for dev
 app.add_middleware(
@@ -46,6 +48,61 @@ def overview(db=Depends(get_db)):
     alerts = db.exec(select(text("count(1)")).select_from(Alert)).one()[0]
     return {"events": events, "alerts": alerts}
 
+@app.get("/api/ssids", dependencies=[Depends(require_key)])
+def list_ssids(minutes: int = Query(default=10, ge=1, le=120), db=Depends(get_db)):
+    since = datetime.utcnow() - timedelta(minutes=minutes)
+    rows = db.exec(
+        select(Event).where(Event.ts >= since).where(Event.type == "mgmt.beacon")
+    ).all()
+    acc = {}
+    for e in rows:
+        if not e.ssid:
+            continue
+        item = acc.setdefault(e.ssid, {"ssid": e.ssid, "bssids": set(), "channels": set(), "bands": set()})
+        if e.bssid:
+            item["bssids"].add(e.bssid)
+        item["channels"].add(e.chan)
+        item["bands"].add(e.band)
+    out = []
+    for v in acc.values():
+        out.append({
+            "ssid": v["ssid"],
+            "bssids": sorted(list(v["bssids"]))[:10],
+            "channels": sorted(list(v["channels"]))[:10],
+            "bands": sorted(list(v["bands"]))[:3],
+        })
+    return out
+
+@app.get("/api/defense", dependencies=[Depends(require_key)])
+def get_defense():
+    return cfg.get("defense", {})
+
+@app.post("/api/defense", dependencies=[Depends(require_key)])
+async def set_defense(request: Request):
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="invalid body")
+    # Shallow merge
+    cfg.setdefault("defense", {})
+    allowed_keys = {"ssid", "allowed_bssids", "allowed_channels", "allowed_bands"}
+    for k in list(body.keys()):
+        if k not in allowed_keys:
+            body.pop(k)
+    cfg["defense"].update(body)
+    # Persist to YAML
+    if not cfg_path:
+        raise HTTPException(status_code=500, detail="config path unknown")
+    try:
+        # Load current file to preserve other sections
+        p = pathlib.Path(cfg_path)
+        doc = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        doc.setdefault("defense", {})
+        doc["defense"].update(cfg["defense"])
+        p.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"failed to persist: {e}")
+    return {"ok": True, "defense": cfg["defense"]}
+
 @app.get("/api/alerts", dependencies=[Depends(require_key)])
 def list_alerts(limit: int = 100, db=Depends(get_db)):
     rows = db.exec(select(Alert).order_by(Alert.id.desc()).limit(limit)).all()
@@ -55,6 +112,10 @@ def list_alerts(limit: int = 100, db=Depends(get_db)):
 def create_test_alert(db=Depends(get_db)):
     a = Alert(ts=datetime.utcnow(), severity="info", kind="test", summary="hello from WIDS")
     db.add(a); db.commit()
+    try:
+        publish_alert_sse(a)
+    except Exception:
+        pass
     return {"ok": True, "id": a.id}
 
 @app.get("/api/events", dependencies=[Depends(require_key)])
@@ -116,10 +177,12 @@ def publish_alert_sse(alert: Alert):
             pass
 
 def main(config_path: str):
-    global cfg, engine
+    global cfg, engine, cfg_path
+    cfg_path = config_path
     cfg = load_config(config_path)
     engine = get_engine(cfg["database"]["path"])
     init_db(engine)
+    ensure_schema(engine)
 
     # ensure indexes
     with session(engine) as db:
@@ -127,7 +190,8 @@ def main(config_path: str):
         db.exec(text("CREATE INDEX IF NOT EXISTS idx_events_type_ts ON event(type, ts);"))
         db.commit()
 
-    # serve built UI if present
+    # serve built UI if present (repo root/ui/dist)
+    # __file__ = <repo>/src/wids/service/api.py; repo root is parents[3]
     dist = pathlib.Path(__file__).resolve().parents[3] / "ui" / "dist"
     if dist.exists():
         app.mount("/", StaticFiles(directory=str(dist), html=True), name="ui")
